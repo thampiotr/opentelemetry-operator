@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/stretchr/testify/require"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -86,9 +87,31 @@ func RunForAllStrategies(t *testing.T, f func(t *testing.T, allocator Allocator)
 	logger := logf.Log.WithName("unit-tests")
 	for _, allocatorName := range allocatorNames {
 		t.Run(allocatorName, func(t *testing.T) {
-			allocator, err := New(allocatorName, logger)
+			allocator, err := NewTestAllocator(allocatorName, logger)
 			require.NoError(t, err)
 			f(t, allocator)
 		})
 	}
+}
+
+// NewTestAllocator advances periodic allocators after each update, without real timers.
+// It is for tests and benchmarks which expect synchronous SetTargets/SetCollectors.
+func NewTestAllocator(name string, log logr.Logger) (Allocator, error) {
+	a, err := New(name, log)
+	if periodic, ok := a.(*loadSheddingAllocator); ok {
+		return synchronousAllocator{periodic}, err
+	}
+	return a, err
+}
+
+type synchronousAllocator struct{ *loadSheddingAllocator }
+
+func (a synchronousAllocator) SetTargets(items []*target.Item) {
+	a.loadSheddingAllocator.SetTargets(items)
+	a.cycle()
+}
+
+func (a synchronousAllocator) SetCollectors(collectors map[string]*Collector) {
+	a.loadSheddingAllocator.SetCollectors(collectors)
+	a.cycle()
 }

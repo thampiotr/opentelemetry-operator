@@ -27,7 +27,7 @@ type consistentHashingStrategy struct {
 	consistentHasher *consistent.Consistent
 }
 
-func newConsistentHashingStrategy() Strategy {
+func newConsistentHashingStrategy() *consistentHashingStrategy {
 	config := consistent.Config{
 		PartitionCount:    1061,
 		ReplicationFactor: 5,

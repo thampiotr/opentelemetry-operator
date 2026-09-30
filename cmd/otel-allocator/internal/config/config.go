@@ -114,9 +114,17 @@ type Config struct {
 // AllocationStrategyConfig holds the per-strategy configuration for allocation strategies.
 // Each allocation strategy has its own section because strategies accept different configuration options.
 type AllocationStrategyConfig struct {
+	LoadShedding      LoadSheddingStrategyConfig      `yaml:"load_shedding,omitempty"`
 	ConsistentHashing ConsistentHashingStrategyConfig `yaml:"consistent_hashing,omitempty"`
 	LeastWeighted     LeastWeightedStrategyConfig     `yaml:"least_weighted,omitempty"`
 	PerNode           PerNodeStrategyConfig           `yaml:"per_node,omitempty"`
+}
+
+// LoadSheddingStrategyConfig configures cycle-based size-aware allocation.
+type LoadSheddingStrategyConfig struct {
+	Interval    time.Duration `yaml:"interval,omitempty"`
+	Window      int           `yaml:"window,omitempty"`
+	DefaultSize float64       `yaml:"default_size,omitempty"`
 }
 
 // ConsistentHashingStrategyConfig holds the configuration options for the consistent-hashing allocation strategy.

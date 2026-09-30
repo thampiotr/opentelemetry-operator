@@ -117,6 +117,10 @@ func (s *Server) setRouter(router *gin.Engine) {
 
 	router.GET("/scrape_configs", s.ScrapeConfigsHandler)
 	router.GET("/jobs", s.JobsHandler)
+	if _, ok := s.allocator.(allocation.SizeReporter); ok {
+		router.GET("/target-sizes", s.SizeTargetsHandler)
+		router.POST("/target-sizes", s.TargetSizesHandler)
+	}
 	router.GET("/jobs/:job_id/targets", s.TargetsHandler)
 	// Use a closure so that both the HTTP and HTTPS routers (the latter built
 	// inside WithTLSConfig) share the same handler initialized in NewServer.

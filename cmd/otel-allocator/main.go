@@ -90,6 +90,7 @@ func main() {
 	}()
 
 	strategyConfig := allocation.StrategyConfig{
+		LoadShedding:      allocation.LoadSheddingStrategyConfig(cfg.AllocationStrategyConfig.LoadShedding),
 		ConsistentHashing: allocation.ConsistentHashingStrategyConfig(cfg.AllocationStrategyConfig.ConsistentHashing),
 		LeastWeighted:     allocation.LeastWeightedStrategyConfig(cfg.AllocationStrategyConfig.LeastWeighted),
 	}
@@ -104,6 +105,11 @@ func main() {
 	if allocErr != nil {
 		setupLog.Error(allocErr, "Unable to initialize allocation strategy")
 		os.Exit(1)
+	}
+
+	if runner, ok := allocator.(allocation.Runner); ok {
+		allocationCtx, cancelAllocation := context.WithCancel(ctx)
+		runGroup.Add(func() error { return runner.Run(allocationCtx) }, func(error) { cancelAllocation() })
 	}
 
 	httpOptions := []server.Option{}

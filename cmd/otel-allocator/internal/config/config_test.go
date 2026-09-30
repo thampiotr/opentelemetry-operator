@@ -1359,3 +1359,20 @@ kube_config_file_path: "` + kubeConfigPath + `"
 		}
 	})
 }
+
+func TestLoadSheddingConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`
+collector_namespace: default
+allocation_strategy: load-shedding
+allocation_strategy_config:
+  load_shedding:
+    interval: 5s
+    window: 6
+    default_size: 1000
+`), 0o600))
+	cfg := CreateDefaultConfig()
+	require.NoError(t, LoadFromFile(path, &cfg))
+	assert.Equal(t, "load-shedding", cfg.AllocationStrategy)
+	assert.Equal(t, LoadSheddingStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000}, cfg.AllocationStrategyConfig.LoadShedding)
+}

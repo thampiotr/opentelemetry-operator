@@ -12,24 +12,28 @@ import (
 	"github.com/open-telemetry/opentelemetry-operator/cmd/otel-allocator/internal/target"
 )
 
-// strategyBuilder constructs a Strategy from the allocation strategy configuration. A builder reads only
+// allocationStrategy identifies both per-target and whole-set allocation strategies.
+type allocationStrategy interface{ GetName() string }
+
+// strategyBuilder constructs a strategy from the allocation strategy configuration. A builder reads only
 // the configuration relevant to its strategy and constructs any strategies its strategy depends on
 // (e.g. a fallback strategy), which are then injected into the strategy's constructor.
-type strategyBuilder func(config StrategyConfig) (Strategy, error)
+type strategyBuilder func(config StrategyConfig) (allocationStrategy, error)
 
 // strategyBuilders returns the registry of strategy builders keyed by strategy name. It is a function
 // rather than a package-level variable so builders can call buildStrategy for the strategies they depend
 // on without creating an initialization cycle.
 func strategyBuilders() map[string]strategyBuilder {
 	return map[string]strategyBuilder{
-		leastWeightedStrategyName:     func(StrategyConfig) (Strategy, error) { return newleastWeightedStrategy(), nil },
-		consistentHashingStrategyName: func(StrategyConfig) (Strategy, error) { return newConsistentHashingStrategy(), nil },
-		perNodeStrategyName:           buildPerNodeStrategy,
+		leastWeightedStrategyName:     func(StrategyConfig) (allocationStrategy, error) { return newleastWeightedStrategy(), nil },
+		consistentHashingStrategyName: func(StrategyConfig) (allocationStrategy, error) { return newConsistentHashingStrategy(), nil },
+		perNodeStrategyName:           func(config StrategyConfig) (allocationStrategy, error) { return buildPerNodeStrategy(config) },
+		loadSheddingStrategyName:      newLoadSheddingStrategy,
 	}
 }
 
 // buildStrategy constructs the named strategy, resolving and injecting any strategies it depends on.
-func buildStrategy(name string, config StrategyConfig) (Strategy, error) {
+func buildStrategy(name string, config StrategyConfig) (allocationStrategy, error) {
 	build, ok := strategyBuilders()[name]
 	if !ok {
 		return nil, fmt.Errorf("unregistered strategy: %s", name)
@@ -41,10 +45,18 @@ func buildStrategy(name string, config StrategyConfig) (Strategy, error) {
 // sections carrying fallbacks of their own, so a fallback strategy can never have a fallback itself,
 // keeping fallback chains bounded to a single level by construction.
 func buildFallbackStrategy(config FallbackStrategyConfig) (Strategy, error) {
-	return buildStrategy(config.Name, StrategyConfig{
+	strategy, err := buildStrategy(config.Name, StrategyConfig{
 		ConsistentHashing: config.ConsistentHashing,
 		LeastWeighted:     config.LeastWeighted,
 	})
+	if err != nil {
+		return nil, err
+	}
+	incremental, ok := strategy.(Strategy)
+	if !ok {
+		return nil, fmt.Errorf("strategy %s cannot be used as a per-target fallback", config.Name)
+	}
+	return incremental, nil
 }
 
 // Option configures the allocator constructed by New.
@@ -57,6 +69,7 @@ type allocatorOptions struct {
 // StrategyConfig holds the configuration for the allocation strategies. Each strategy has its own
 // section because strategies accept different configuration options.
 type StrategyConfig struct {
+	LoadShedding      LoadSheddingStrategyConfig
 	ConsistentHashing ConsistentHashingStrategyConfig
 	LeastWeighted     LeastWeightedStrategyConfig
 	PerNode           PerNodeStrategyConfig
@@ -100,7 +113,15 @@ func New(name string, log logr.Logger, opts ...Option) (Allocator, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newAllocator(log.WithValues("allocator", name), strategy)
+	log = log.WithValues("allocator", name)
+	switch s := strategy.(type) {
+	case *loadSheddingStrategy:
+		return newLoadSheddingAllocator(log, s)
+	case Strategy:
+		return newAllocator(log, s)
+	default:
+		return nil, fmt.Errorf("unsupported strategy %s", name)
+	}
 }
 
 func GetRegisteredAllocatorNames() []string {

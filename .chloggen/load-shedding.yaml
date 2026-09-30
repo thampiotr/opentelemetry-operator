@@ -1,0 +1,4 @@
+change_type: enhancement
+component: target allocator
+note: Add an experimental standalone load-shedding allocation strategy with windowed target size estimates and an HTTP size-report endpoint.
+issues: []

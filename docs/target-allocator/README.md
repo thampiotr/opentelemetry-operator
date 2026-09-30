@@ -65,6 +65,11 @@ targets to the same collectors, but will experience rebalancing when the collect
 
 This is the default.
 
+#### `load-shedding`
+
+An experimental size-aware strategy for a standalone, single-replica TA. It starts with consistent-hashing homes
+and moves targets from overloaded collectors using windowed size estimates. See [configuration and size reports](load-shedding.md).
+
 #### `least-weighted`
 
 A strategy that simply assigns the target to the collector with the least number of targets. It achieves more stability

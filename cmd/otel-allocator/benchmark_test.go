@@ -172,7 +172,7 @@ func createTestDiscoverer(allocationStrategy string, relabelConfig map[string][]
 	ctx := context.Background()
 	logger := ctrl.Log.WithName(fmt.Sprintf("bench-%s", allocationStrategy))
 	ctrl.SetLogger(logr.New(log.NullLogSink{}))
-	allocator, err := allocation.New(allocationStrategy, logger)
+	allocator, err := allocation.NewTestAllocator(allocationStrategy, logger)
 	if err != nil {
 		return nil, err
 	}
