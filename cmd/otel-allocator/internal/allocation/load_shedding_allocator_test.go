@@ -19,10 +19,10 @@ import (
 
 func TestLoadSheddingConfig(t *testing.T) {
 	a := testSheddingAllocator(t)
-	require.Equal(t, LoadSheddingStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000}, a.strategy.config)
+	require.Equal(t, LoadSheddingStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000, ProbeInterval: 30 * time.Second, ProbeTimeout: 5 * time.Second, ProbeConcurrency: 4, ProbeMaxBytes: 64 << 20}, a.strategy.config)
 	require.Contains(t, GetRegisteredAllocatorNames(), loadSheddingStrategyName)
 	for _, config := range []LoadSheddingStrategyConfig{
-		{Interval: -1}, {Window: -1}, {Window: 121}, {DefaultSize: -1}, {DefaultSize: math.NaN()}, {DefaultSize: math.Inf(1)},
+		{Interval: -1}, {Window: -1}, {Window: 121}, {DefaultSize: -1}, {DefaultSize: math.NaN()}, {DefaultSize: math.Inf(1)}, {ProbeInterval: -1}, {ProbeTimeout: -1}, {ProbeConcurrency: -1}, {ProbeConcurrency: 65}, {ProbeMaxBytes: -1}, {ProbeMaxBytes: 1 << 31},
 	} {
 		_, err := New(loadSheddingStrategyName, logr.Discard(), WithStrategyConfig(StrategyConfig{LoadShedding: config}))
 		require.Error(t, err)
@@ -63,23 +63,16 @@ func TestLoadSheddingPublication(t *testing.T) {
 	require.Empty(t, a.Collectors())
 }
 
-func TestLoadSheddingReports(t *testing.T) {
+func TestLoadSheddingRemovesEstimates(t *testing.T) {
 	a := testSheddingAllocator(t)
 	item := sheddingItem("job", "host:80")
-	id := item.Hash()
 	a.SetTargets([]*target.Item{item})
-	n, err := a.ReportSizes(map[target.ItemHash]float64{id: 20, 0: 30})
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
+	a.estimates[item.Hash()] = 20
 	a.cycle()
-	require.Equal(t, float64(20), a.window.cycles[0][id])
-	for _, invalid := range []float64{0, -1, math.NaN(), math.Inf(1), 1e13} {
-		_, err = a.ReportSizes(map[target.ItemHash]float64{id: 30, 0: invalid})
-		require.Error(t, err)
-		require.Equal(t, float64(20), a.estimates[id], "reject invalid batches atomically")
-	}
+	require.Equal(t, float64(20), a.window.cycles[0][item.Hash()])
 	a.SetTargets(nil)
 	require.Empty(t, a.estimates)
+	require.Empty(t, a.probes)
 	for range 12 {
 		a.cycle()
 	}
@@ -114,7 +107,6 @@ func TestLoadSheddingConcurrentReaders(t *testing.T) {
 	wg.Go(func() {
 		for range 100 {
 			a.SetTargets([]*target.Item{item})
-			_, _ = a.ReportSizes(map[target.ItemHash]float64{item.Hash(): 10})
 		}
 	})
 	for range 100 {

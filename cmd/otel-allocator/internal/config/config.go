@@ -122,9 +122,13 @@ type AllocationStrategyConfig struct {
 
 // LoadSheddingStrategyConfig configures cycle-based size-aware allocation.
 type LoadSheddingStrategyConfig struct {
-	Interval    time.Duration `yaml:"interval,omitempty"`
-	Window      int           `yaml:"window,omitempty"`
-	DefaultSize float64       `yaml:"default_size,omitempty"`
+	Interval         time.Duration `yaml:"interval,omitempty"`
+	Window           int           `yaml:"window,omitempty"`
+	DefaultSize      float64       `yaml:"default_size,omitempty"`
+	ProbeInterval    time.Duration `yaml:"probe_interval,omitempty"`
+	ProbeTimeout     time.Duration `yaml:"probe_timeout,omitempty"`
+	ProbeConcurrency int           `yaml:"probe_concurrency,omitempty"`
+	ProbeMaxBytes    int64         `yaml:"probe_max_bytes,omitempty"`
 }
 
 // ConsistentHashingStrategyConfig holds the configuration options for the consistent-hashing allocation strategy.

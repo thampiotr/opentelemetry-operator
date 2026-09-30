@@ -68,7 +68,7 @@ This is the default.
 #### `load-shedding`
 
 An experimental size-aware strategy for a standalone, single-replica TA. It starts with consistent-hashing homes
-and moves targets from overloaded collectors using windowed size estimates. See [configuration and size reports](load-shedding.md).
+and moves targets from overloaded collectors using windowed size estimates. See [configuration and asynchronous probing](load-shedding.md).
 
 #### `least-weighted`
 

@@ -20,9 +20,13 @@ import (
 
 // LoadSheddingStrategyConfig configures the size window and recomputation interval.
 type LoadSheddingStrategyConfig struct {
-	Interval    time.Duration
-	Window      int
-	DefaultSize float64
+	Interval         time.Duration
+	Window           int
+	DefaultSize      float64
+	ProbeInterval    time.Duration
+	ProbeTimeout     time.Duration
+	ProbeConcurrency int
+	ProbeMaxBytes    int64
 }
 
 func newLoadSheddingStrategy(config StrategyConfig) (allocationStrategy, error) {
@@ -39,13 +43,22 @@ func newLoadSheddingStrategy(config StrategyConfig) (allocationStrategy, error) 
 	if c.Interval < time.Millisecond || c.Window < 1 || c.Window > 120 || !validSize(c.DefaultSize) {
 		return nil, fmt.Errorf("load-shedding requires interval >= 1ms, window between 1 and 120, and default_size in (0, 1e12]")
 	}
+	if c.ProbeInterval == 0 {
+		c.ProbeInterval = 30 * time.Second
+	}
+	if c.ProbeTimeout == 0 {
+		c.ProbeTimeout = 5 * time.Second
+	}
+	if c.ProbeConcurrency == 0 {
+		c.ProbeConcurrency = 4
+	}
+	if c.ProbeMaxBytes == 0 {
+		c.ProbeMaxBytes = 64 << 20
+	}
+	if c.ProbeInterval < time.Millisecond || c.ProbeTimeout < time.Millisecond || c.ProbeConcurrency < 1 || c.ProbeConcurrency > 64 || c.ProbeMaxBytes < 1 || c.ProbeMaxBytes > 1<<30 {
+		return nil, fmt.Errorf("load-shedding requires probe durations >= 1ms, concurrency between 1 and 64, and max bytes between 1 and 1GiB")
+	}
 	return &loadSheddingStrategy{config: c}, nil
-}
-
-// SizeReporter accepts asynchronous estimates for discovered target identities.
-// Reports take effect at the next allocation cycle; unknown targets are ignored.
-type SizeReporter interface {
-	ReportSizes(map[target.ItemHash]float64) (int, error)
 }
 
 // Runner is implemented by allocators which need a background recomputation loop.
@@ -55,6 +68,10 @@ type Runner interface {
 
 type loadSheddingAllocator struct {
 	strategy   *loadSheddingStrategy
+	log        logr.Logger
+	probeJobs  map[string]*probeJob
+	probes     map[target.ItemHash]*probeState
+	probeWake  chan struct{}
 	mu         sync.Mutex
 	targets    map[target.ItemHash]*target.Item
 	collectors map[string]*Collector
@@ -76,9 +93,9 @@ type allocationSnapshot struct {
 }
 
 var (
-	_ Allocator    = (*loadSheddingAllocator)(nil)
-	_ SizeReporter = (*loadSheddingAllocator)(nil)
-	_ Runner       = (*loadSheddingAllocator)(nil)
+	_ Allocator            = (*loadSheddingAllocator)(nil)
+	_ ScrapeConfigReceiver = (*loadSheddingAllocator)(nil)
+	_ Runner               = (*loadSheddingAllocator)(nil)
 )
 
 func newLoadSheddingAllocator(log logr.Logger, strategy *loadSheddingStrategy) (Allocator, error) {
@@ -98,6 +115,9 @@ func newLoadSheddingAllocator(log logr.Logger, strategy *loadSheddingStrategy) (
 	log.Info("Starting load-shedding allocation", "interval", strategy.config.Interval, "window", strategy.config.Window, "defaultSize", strategy.config.DefaultSize)
 	return &loadSheddingAllocator{
 		strategy:            strategy,
+		log:                 log,
+		probes:              make(map[target.ItemHash]*probeState),
+		probeWake:           make(chan struct{}, 1),
 		targets:             make(map[target.ItemHash]*target.Item),
 		collectors:          make(map[string]*Collector),
 		estimates:           make(map[target.ItemHash]float64),
@@ -116,8 +136,17 @@ func (a *loadSheddingAllocator) SetTargets(items []*target.Item) {
 	for _, item := range items {
 		itemCopy := *item
 		next[item.Hash()] = &itemCopy
+		if a.probes[item.Hash()] == nil {
+			a.probes[item.Hash()] = &probeState{}
+		}
 	}
 	a.targets = next
+	for id := range a.probes {
+		if _, exists := next[id]; !exists {
+			delete(a.probes, id)
+		}
+	}
+	a.wakeProbes()
 	for id := range a.estimates {
 		if _, exists := next[id]; !exists {
 			delete(a.estimates, id)
@@ -136,25 +165,18 @@ func (a *loadSheddingAllocator) SetCollectors(collectors map[string]*Collector) 
 
 func validSize(size float64) bool { return size > 0 && size <= 1e12 }
 
-func (a *loadSheddingAllocator) ReportSizes(sizes map[target.ItemHash]float64) (int, error) {
-	for id, size := range sizes {
-		if !validSize(size) {
-			return 0, fmt.Errorf("invalid size for target %s: expected a finite value in (0, 1e12]", id)
-		}
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	accepted := 0
-	for id, size := range sizes {
-		if _, exists := a.targets[id]; exists {
-			a.estimates[id] = size
-			accepted++
-		}
-	}
-	return accepted, nil
-}
-
 func (a *loadSheddingAllocator) Run(ctx context.Context) error {
+	var workers sync.WaitGroup
+	for range a.strategy.config.ProbeConcurrency {
+		workers.Go(func() { a.runProber(ctx) })
+	}
+	defer func() {
+		workers.Wait()
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		closeProbeJobs(a.probeJobs)
+	}()
+
 	interval := a.strategy.config.Interval
 	for {
 		// Align cycles approximately; this does not imply identical discovery across replicas.

@@ -117,10 +117,6 @@ func (s *Server) setRouter(router *gin.Engine) {
 
 	router.GET("/scrape_configs", s.ScrapeConfigsHandler)
 	router.GET("/jobs", s.JobsHandler)
-	if _, ok := s.allocator.(allocation.SizeReporter); ok {
-		router.GET("/target-sizes", s.SizeTargetsHandler)
-		router.POST("/target-sizes", s.TargetSizesHandler)
-	}
 	router.GET("/jobs/:job_id/targets", s.TargetsHandler)
 	// Use a closure so that both the HTTP and HTTPS routers (the latter built
 	// inside WithTLSConfig) share the same handler initialized in NewServer.
@@ -280,6 +276,9 @@ func (s *Server) MarshalScrapeConfig(configs map[string]*promconfig.ScrapeConfig
 // configurations such that the underlying prometheus marshaling is used. After that, the YAML is converted
 // in to a JSON format for consumers to use.
 func (s *Server) UpdateScrapeConfigResponse(configs map[string]*promconfig.ScrapeConfig) error {
+	if receiver, ok := s.allocator.(allocation.ScrapeConfigReceiver); ok {
+		receiver.SetScrapeConfigs(configs)
+	}
 	err := s.MarshalScrapeConfig(configs, false)
 	if err != nil {
 		return err

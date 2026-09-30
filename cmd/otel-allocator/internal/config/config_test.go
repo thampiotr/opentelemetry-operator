@@ -1370,9 +1370,13 @@ allocation_strategy_config:
     interval: 5s
     window: 6
     default_size: 1000
+    probe_interval: 30s
+    probe_timeout: 5s
+    probe_concurrency: 4
+    probe_max_bytes: 67108864
 `), 0o600))
 	cfg := CreateDefaultConfig()
 	require.NoError(t, LoadFromFile(path, &cfg))
 	assert.Equal(t, "load-shedding", cfg.AllocationStrategy)
-	assert.Equal(t, LoadSheddingStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000}, cfg.AllocationStrategyConfig.LoadShedding)
+	assert.Equal(t, LoadSheddingStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000, ProbeInterval: 30 * time.Second, ProbeTimeout: 5 * time.Second, ProbeConcurrency: 4, ProbeMaxBytes: 64 << 20}, cfg.AllocationStrategyConfig.LoadShedding)
 }
