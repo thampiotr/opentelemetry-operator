@@ -108,6 +108,9 @@ func (s *Server) setRouter(router *gin.Engine) {
 	router.Use(s.PrometheusMiddleware)
 
 	router.GET("/", s.IndexHandler)
+	router.GET("/debug/allocation", s.allocationPageHandler)
+	router.GET("/debug/allocation/data", s.allocationDataHandler)
+	router.GET("/debug/allocation/search", s.allocationSearchHandler)
 	router.GET("/debug/collector", s.CollectorHTMLHandler)
 	router.GET("/debug/job", s.JobHTMLHandler)
 	router.GET("/debug/target", s.TargetHTMLHandler)

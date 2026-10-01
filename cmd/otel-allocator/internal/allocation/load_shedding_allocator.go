@@ -87,6 +87,8 @@ type loadSheddingAllocator struct {
 }
 
 type allocationSnapshot struct {
+	sizes      map[target.ItemHash]float64
+	updated    time.Time
 	targets    map[target.ItemHash]*target.Item
 	collectors map[string]*Collector
 	jobs       map[string]map[string][]*target.Item
@@ -205,6 +207,7 @@ func (a *loadSheddingAllocator) cycle() {
 	sizes, total := a.window.observe(raw)
 	plan := a.strategy.plan(a.targets, a.collectors, sizes, total)
 	next := makeAllocationSnapshot(a.targets, a.collectors, plan.owners)
+	next.sizes, next.updated = sizes, time.Now()
 	a.publish(next)
 	a.unresolved.Record(context.Background(), int64(plan.unresolved))
 	a.timeToAssign.Record(context.Background(), time.Since(begin).Seconds(), metric.WithAttributes(attribute.String("strategy", loadSheddingStrategyName), attribute.String("method", "cycle")))

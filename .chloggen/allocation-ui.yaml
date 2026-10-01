@@ -1,0 +1,4 @@
+change_type: enhancement
+component: target allocator
+note: Add a lightweight allocation explorer showing collector load, estimated target sizes, and searchable target ownership.
+issues: []

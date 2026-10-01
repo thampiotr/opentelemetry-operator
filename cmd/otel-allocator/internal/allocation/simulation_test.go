@@ -4,7 +4,9 @@
 package allocation
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -25,6 +27,7 @@ func TestSimulatedAllocation_Common(t *testing.T) {
 		{"ConsistentHashing", simulateHashing},
 		{"CapacityAware", simulateCapacityAware},
 		{"LoadShedding", simulateLoadShedding},
+		{"Sticky", simulateSticky},
 	} {
 		t.Run(strategy.name, func(t *testing.T) {
 			t.Run("valid_assignments", func(t *testing.T) {
@@ -137,25 +140,56 @@ func countMoves(before, after map[string]string) int {
 }
 
 func TestSimulatedAllocation_Scenarios(t *testing.T) {
+	runSimulatedScenarios(t, scenarioSnapshot)
+}
+
+func TestSimulatedAllocation_Sensitivity(t *testing.T) {
+	for _, variant := range []struct {
+		name                                   string
+		targets, collectors, whales, variation float64
+	}{
+		{"baseline", 1, 1, 1, 1},
+		{"targets_half", .5, 1, 1, 1},
+		{"targets_double", 2, 1, 1, 1},
+		{"collectors_half", 1, .5, 1, 1},
+		{"collectors_double", 1, 2, 1, 1},
+		{"whales_half", 1, 1, .5, 1},
+		{"whales_double", 1, 1, 2, 1},
+		{"variation_half", 1, 1, 1, .5},
+		{"variation_double", 1, 1, 1, 2},
+	} {
+		t.Run(variant.name, func(t *testing.T) {
+			runSimulatedScenarios(t, func(scenario string, cycle int) simSnapshot {
+				return scaledScenarioSnapshot(scenario, cycle, variant.targets, variant.collectors, variant.whales, variant.variation)
+			})
+		})
+	}
+}
+
+func runSimulatedScenarios(t *testing.T, snapshotAt func(string, int) simSnapshot) {
 	const cycles = 360 // Thirty simulated minutes at five seconds per cycle.
 	for _, scenario := range []string{"targets", "sizes", "collectors", "combined"} {
 		t.Run(scenario, func(t *testing.T) {
-			for _, algorithm := range []string{"ConsistentHashing", "CapacityAware", "LoadShedding"} {
+			for _, algorithm := range []string{"ConsistentHashing", "CapacityAware", "LoadShedding", "Sticky"} {
 				t.Run(algorithm, func(t *testing.T) {
 					var history []simSnapshot
+					sticky := newSimSticky()
 					var previous map[string]string
 					priorOwner := map[string]string{}
 					moves, opportunities, reversals, forced := 0, 0, 0, 0
+					seriesMoveSum, seriesMoveWorst := 0.0, 0.0
 					moveSum, moveWorst, eventSum, backgroundSum := 0.0, 0.0, 0.0, 0.0
 					events, background := 0, 0
 					ratioSum, ratioWorst, lowerBoundWorst := 0.0, 0.0, 0.0
 					for cycle := range cycles {
-						snapshot := scenarioSnapshot(scenario, cycle)
+						snapshot := snapshotAt(scenario, cycle)
 						history = append(history, snapshot)
 						history = history[max(0, len(history)-(2*simWindow-1)):]
 						var owners map[string]string
 						if algorithm == "ConsistentHashing" {
 							owners = simulateHashing(t, snapshot.targets, snapshot.collectors...)
+						} else if algorithm == "Sticky" {
+							owners = sticky.allocate(t, history, simWindow).owners
 						} else if algorithm == "LoadShedding" {
 							owners = allocateLoadShedding(t, history, simWindow).owners
 						} else {
@@ -167,6 +201,7 @@ func TestSimulatedAllocation_Scenarios(t *testing.T) {
 							loads[name] = 0
 						}
 						cycleMoves, survivors, largest := 0, 0, 0
+						movedSeries, survivingSeries := 0, 0
 						for _, item := range snapshot.targets {
 							owner, assigned := owners[item.address]
 							_, valid := loads[owner]
@@ -177,8 +212,10 @@ func TestSimulatedAllocation_Scenarios(t *testing.T) {
 							largest = max(largest, item.series)
 							if old, existed := previous[item.address]; existed {
 								survivors++
+								survivingSeries += item.series
 								if old != owner {
 									cycleMoves++
+									movedSeries += item.series
 									if _, stillPresent := loads[old]; !stillPresent {
 										forced++
 									}
@@ -196,6 +233,9 @@ func TestSimulatedAllocation_Scenarios(t *testing.T) {
 						}
 						if cycle > 0 {
 							require.Positive(t, survivors)
+							seriesPercent := 100 * float64(movedSeries) / float64(survivingSeries)
+							seriesMoveSum += seriesPercent
+							seriesMoveWorst = max(seriesMoveWorst, seriesPercent)
 							percent := 100 * float64(cycleMoves) / float64(survivors)
 							moves += cycleMoves
 							opportunities += survivors
@@ -224,7 +264,7 @@ func TestSimulatedAllocation_Scenarios(t *testing.T) {
 						ratioWorst = max(ratioWorst, float64(maximum)/mean)
 						lowerBoundWorst = max(lowerBoundWorst, max(1, float64(largest)/mean))
 					}
-					t.Logf("SUMMARY moves=%d opportunities=%d movement_pct=%.3f avg_cycle_pct=%.3f worst_cycle_pct=%.3f major_event_pct=%.3f other_cycle_pct=%.3f forced=%d reversals=%d mean_ratio=%.3f worst_ratio=%.3f worst_indivisible_lower_bound=%.3f", moves, opportunities, 100*float64(moves)/float64(opportunities), moveSum/(cycles-1), moveWorst, eventSum/float64(events), backgroundSum/float64(background), forced, reversals, ratioSum/cycles, ratioWorst, lowerBoundWorst)
+					t.Logf("SUMMARY moves=%d opportunities=%d movement_pct=%.3f avg_cycle_pct=%.3f worst_cycle_pct=%.3f major_event_pct=%.3f other_cycle_pct=%.3f forced=%d reversals=%d mean_ratio=%.3f worst_ratio=%.3f worst_indivisible_lower_bound=%.3f avg_series_move_pct=%.3f worst_series_move_pct=%.3f", moves, opportunities, 100*float64(moves)/float64(opportunities), moveSum/(cycles-1), moveWorst, eventSum/float64(events), backgroundSum/float64(background), forced, reversals, ratioSum/cycles, ratioWorst, lowerBoundWorst, seriesMoveSum/(cycles-1), seriesMoveWorst)
 				})
 			}
 		})
@@ -234,6 +274,10 @@ func TestSimulatedAllocation_Scenarios(t *testing.T) {
 // scenarioSnapshot generates reproducible synthetic workloads, not production traces.
 // Major changes occur every 30 cycles; sizes also have deterministic +/-5% noise.
 func scenarioSnapshot(scenario string, cycle int) simSnapshot {
+	return scaledScenarioSnapshot(scenario, cycle, 1, 1, 1, 1)
+}
+
+func scaledScenarioSnapshot(scenario string, cycle int, targetScale, collectorScale, whaleScale, variationScale float64) simSnapshot {
 	phase := cycle / 30
 	count, offset, nodes := 1500, 0, 6
 	if scenario == "targets" || scenario == "combined" {
@@ -243,6 +287,9 @@ func scenarioSnapshot(scenario string, cycle int) simSnapshot {
 	if scenario == "collectors" || scenario == "combined" {
 		nodes = []int{3, 4, 6, 8, 10, 7, 5, 3, 6, 10, 4, 3}[phase]
 	}
+	count = max(1, int(float64(count)*targetScale))
+	offset = int(float64(offset) * targetScale)
+	nodes = max(2, int(float64(nodes)*collectorScale+.5))
 	s := simSnapshot{targets: make([]simulatedTarget, count), collectors: make([]string, nodes)}
 	for i := range s.collectors {
 		s.collectors[i] = fmt.Sprintf("alloy-%d", i)
@@ -259,14 +306,16 @@ func scenarioSnapshot(scenario string, cycle int) simSnapshot {
 		case bucket < 995:
 			size = 10000 + int((h/1000)%20001)
 		default:
-			size = 100000 + int((h/1000)%300001)
+			size = int(float64(100000+int((h/1000)%300001)) * whaleScale)
 		}
 		if scenario == "sizes" || scenario == "combined" {
 			if h%7 == 0 {
-				size = size * []int{100, 200, 50, 150, 75, 250, 100, 40, 180, 60, 130, 100}[phase] / 100
+				percent := []int{100, 200, 50, 150, 75, 250, 100, 40, 180, 60, 130, 100}[phase]
+				percent = max(10, 100+int(float64(percent-100)*variationScale))
+				size = max(1, size*percent/100)
 			}
 			noise := int((hasher{}).Sum64([]byte(fmt.Sprintf("%s/%d", address, cycle)))%11) - 5
-			size = max(1, size*(100+noise)/100)
+			size = max(1, size*(100+int(float64(noise)*variationScale))/100)
 		}
 		s.targets[i] = simulatedTarget{address, size}
 	}
@@ -522,6 +571,23 @@ func sizeTier(size int, ideal float64) int {
 // Load shedding.
 
 func TestSimulatedAllocation_LoadShedding(t *testing.T) {
+	t.Run("demo_whales", testDemoWhales)
+	t.Run("small_moves_block_feasible_whale_move", func(t *testing.T) {
+		snapshot := sheddingFixture(t, [][]int{{1220}, {1, 1, 1, 1}, {500}})
+		// Put a small target before the first whale in stable hash order.
+		donor := snapshot.targets[1:5]
+		slices.SortFunc(donor, func(a, b simulatedTarget) int { return hashOrder(a.address, b.address) })
+		for i, size := range []int{120, 800, 290, 800} {
+			donor[i].series = size
+		}
+		a := allocateLoadShedding(t, []simSnapshot{snapshot}, simWindow)
+		require.Equal(t, map[string]int{"alloy-0": 1220, "alloy-1": 1600, "alloy-2": 910}, a.loads)
+		require.Equal(t, 1, a.unresolved)
+		// Moving the first whale instead of the small targets would satisfy every bound.
+		ideal := float64(a.total) / 3
+		require.GreaterOrEqual(t, float64(2010-800), .8*ideal)
+		require.LessOrEqual(t, float64(500+800), 1.1*ideal)
+	})
 	t.Run("local_corrections", func(t *testing.T) {
 		s := sheddingFixture(t, [][]int{{20, 20, 20, 20, 20, 20, 20, 20, 20}, {20, 20, 20}, {20, 20, 20}})
 		home := simulateHashing(t, s.targets, s.collectors...)
@@ -600,6 +666,71 @@ func TestSimulatedAllocation_LoadShedding(t *testing.T) {
 		history = append(history, simSnapshot{history[len(history)-1].targets, nil})
 		require.Empty(t, allocateLoadShedding(t, history, simWindow).owners)
 	})
+}
+
+func testDemoWhales(t *testing.T) {
+	data, err := os.ReadFile("testdata/load_shedding_demo.json")
+	require.NoError(t, err)
+	var fixture struct {
+		Collectors []string
+		Targets    []struct {
+			Address string
+			Series  int
+			Owner   string
+		}
+	}
+	require.NoError(t, json.Unmarshal(data, &fixture))
+	snapshot := simSnapshot{collectors: fixture.Collectors}
+	expected := map[string]string{}
+	for _, item := range fixture.Targets {
+		snapshot.targets = append(snapshot.targets, simulatedTarget{item.Address, item.Series})
+		expected[item.Address] = item.Owner
+	}
+	home := simulateHashing(t, snapshot.targets, snapshot.collectors...)
+	actual := allocateLoadShedding(t, []simSnapshot{snapshot}, simWindow)
+	require.Equal(t, expected, actual.owners)
+	homeLoads := map[string]int{}
+	for _, item := range snapshot.targets {
+		homeLoads[home[item.address]] += item.series
+	}
+	t.Logf("home=%v final=%v moves=%d unresolved=%d", homeLoads, actual.loads, countMoves(home, actual.owners), actual.unresolved)
+	for _, item := range snapshot.targets {
+		if item.series == 800 {
+			t.Logf("whale %s home=%s final=%s", item.address, home[item.address], actual.owners[item.address])
+		}
+	}
+	// Follow the donor's stable order to explain which earlier moves block the whales.
+	ordered := slices.Clone(snapshot.targets)
+	slices.SortFunc(ordered, func(a, b simulatedTarget) int { return hashOrder(a.address, b.address) })
+	movedSize := 0
+	donor, receiver := snapshot.collectors[1], snapshot.collectors[2]
+	ideal := float64(actual.total) / float64(len(snapshot.collectors))
+	for _, item := range ordered {
+		if home[item.address] != donor {
+			continue
+		}
+		if item.series == 800 {
+			t.Logf("whale=%s earlier_shed=%d donor_before=%d receiver_before=%d donor_after=%d receiver_after=%d floor=%.2f adoption_cap=%.2f", item.address, movedSize, homeLoads[donor]-movedSize, homeLoads[receiver]+movedSize, homeLoads[donor]-movedSize-800, homeLoads[receiver]+movedSize+800, .8*ideal, 1.1*ideal)
+		}
+		if actual.owners[item.address] != donor {
+			movedSize += item.series
+		}
+	}
+	require.Equal(t, map[string]int{snapshot.collectors[0]: 1220, donor: 1600, receiver: 910}, actual.loads)
+	require.Equal(t, 20, countMoves(home, actual.owners))
+	require.Equal(t, 1, actual.unresolved)
+	// A single move from the home placement satisfies both admission thresholds.
+	require.GreaterOrEqual(t, float64(homeLoads[donor]-800), .8*ideal)
+	require.LessOrEqual(t, float64(homeLoads[receiver]+800), 1.1*ideal)
+	for _, load := range []int{homeLoads[snapshot.collectors[0]], homeLoads[donor] - 800, homeLoads[receiver] + 800} {
+		require.LessOrEqual(t, float64(load), 1.2*ideal)
+	}
+
+	history := []simSnapshot{snapshot}
+	for range 12 {
+		history = append(history, snapshot)
+		require.Equal(t, actual, allocateLoadShedding(t, history, simWindow))
+	}
 }
 
 func simulateLoadShedding(t *testing.T, targets []simulatedTarget, collectors ...string) map[string]string {

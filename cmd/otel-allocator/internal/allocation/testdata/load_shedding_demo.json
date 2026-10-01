@@ -1,0 +1,309 @@
+{
+  "collectors": [
+    "alloy-target-allocation-0",
+    "alloy-target-allocation-1",
+    "alloy-target-allocation-2"
+  ],
+  "targets": [
+    {
+      "address": "10.244.0.163:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.131:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.116:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.114:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.137:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.113:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.142:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.145:9001",
+      "series": 800,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.144:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.126:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.104:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.152:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.124:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.105:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.125:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.106:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.123:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.118:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.150:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.164:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.146:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.115:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.149:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.160:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.110:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.134:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.133:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.132:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.119:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.156:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.135:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.154:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.108:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.155:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.141:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.136:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.147:9001",
+      "series": 800,
+      "owner": "alloy-target-allocation-1"
+    },
+    {
+      "address": "10.244.0.139:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.148:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.162:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.138:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.127:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.159:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.130:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.109:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.117:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.143:9001",
+      "series": 800,
+      "owner": "alloy-target-allocation-1"
+    },
+    {
+      "address": "10.244.0.157:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.129:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.151:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.112:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.121:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.165:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.120:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.153:9001",
+      "series": 10,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.107:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.111:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.122:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-0"
+    },
+    {
+      "address": "10.244.0.140:9001",
+      "series": 40,
+      "owner": "alloy-target-allocation-2"
+    },
+    {
+      "address": "10.244.0.128:9001",
+      "series": 20,
+      "owner": "alloy-target-allocation-2"
+    }
+  ]
+}
