@@ -22,6 +22,13 @@ import (
 )
 
 func TestServerConfiguresProbes(t *testing.T) {
+	for _, strategy := range []string{"load-shedding", "sticky"} {
+		t.Run(strategy, func(t *testing.T) { testServerProbes(t, strategy) })
+	}
+}
+
+func testServerProbes(t *testing.T, strategy string) {
+	t.Helper()
 	probed := make(chan struct{}, 1)
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/custom" {
@@ -35,7 +42,7 @@ func TestServerConfiguresProbes(t *testing.T) {
 		_, _ = io.WriteString(w, "x 1\n")
 	}))
 	defer endpoint.Close()
-	a, err := allocation.New("load-shedding", logr.Discard(), allocation.WithStrategyConfig(allocation.StrategyConfig{LoadShedding: allocation.LoadSheddingStrategyConfig{Interval: 10 * time.Millisecond}}))
+	a, err := allocation.New(strategy, logr.Discard(), allocation.WithStrategyConfig(allocation.StrategyConfig{LoadShedding: allocation.SizeAwareStrategyConfig{Interval: 10 * time.Millisecond}, Sticky: allocation.SizeAwareStrategyConfig{Interval: 10 * time.Millisecond}}))
 	require.NoError(t, err)
 	s, err := NewServer(logr.Discard(), a, "")
 	require.NoError(t, err)
@@ -70,7 +77,7 @@ func TestServerConfiguresProbes(t *testing.T) {
 }
 
 func TestTargetSizesEndpointRemoved(t *testing.T) {
-	for _, strategy := range []string{"load-shedding", "consistent-hashing"} {
+	for _, strategy := range []string{"load-shedding", "sticky", "consistent-hashing"} {
 		a, err := allocation.New(strategy, logr.Discard())
 		require.NoError(t, err)
 		s, err := NewServer(logr.Discard(), a, "")

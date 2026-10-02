@@ -1,0 +1,4 @@
+change_type: enhancement
+component: target allocator
+note: Add an experimental standalone sticky allocation strategy that preserves target ownership and rebalances sustained overload using asynchronous size estimates, with per-collector estimated series and retained-target movement metrics.
+issues: []

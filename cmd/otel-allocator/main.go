@@ -90,7 +90,8 @@ func main() {
 	}()
 
 	strategyConfig := allocation.StrategyConfig{
-		LoadShedding:      allocation.LoadSheddingStrategyConfig(cfg.AllocationStrategyConfig.LoadShedding),
+		LoadShedding:      allocation.SizeAwareStrategyConfig(cfg.AllocationStrategyConfig.LoadShedding),
+		Sticky:            allocation.SizeAwareStrategyConfig(cfg.AllocationStrategyConfig.Sticky),
 		ConsistentHashing: allocation.ConsistentHashingStrategyConfig(cfg.AllocationStrategyConfig.ConsistentHashing),
 		LeastWeighted:     allocation.LeastWeightedStrategyConfig(cfg.AllocationStrategyConfig.LeastWeighted),
 	}

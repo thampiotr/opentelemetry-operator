@@ -16,26 +16,14 @@ import (
 const loadSheddingStrategyName = "load-shedding"
 
 type loadSheddingStrategy struct {
-	config LoadSheddingStrategyConfig
+	config SizeAwareStrategyConfig
 }
 
 func (*loadSheddingStrategy) GetName() string { return loadSheddingStrategyName }
 
-type sheddingPlan struct {
-	owners     map[target.ItemHash]string
-	loads      map[string]float64
-	unresolved int
-}
-
-type sheddingTarget struct {
-	id   target.ItemHash
-	key  string
-	size float64
-}
-
 // plan starts from hashing homes on every cycle; previous assignments are not inputs.
-func (s *loadSheddingStrategy) plan(items map[target.ItemHash]*target.Item, collectors map[string]*Collector, sizes map[target.ItemHash]float64, total float64) sheddingPlan {
-	p := sheddingPlan{
+func (s *loadSheddingStrategy) plan(items map[target.ItemHash]*target.Item, collectors map[string]*Collector, sizes map[target.ItemHash]float64, total float64) allocationPlan {
+	p := allocationPlan{
 		owners: make(map[target.ItemHash]string, len(items)),
 		loads:  make(map[string]float64, len(collectors)),
 	}
@@ -59,19 +47,19 @@ func (s *loadSheddingStrategy) plan(items map[target.ItemHash]*target.Item, coll
 	return p
 }
 
-func (p *sheddingPlan) assignHomes(items map[target.ItemHash]*target.Item, sizes map[target.ItemHash]float64, ring *consistent.Consistent, names []string) map[string][]sheddingTarget {
-	homes := make(map[string][]sheddingTarget, len(names))
+func (p *allocationPlan) assignHomes(items map[target.ItemHash]*target.Item, sizes map[target.ItemHash]float64, ring *consistent.Consistent, names []string) map[string][]weightedTarget {
+	homes := make(map[string][]weightedTarget, len(names))
 	for _, name := range names {
 		p.loads[name] = 0
 	}
 	for id, item := range items {
 		home := ring.LocateKey([]byte(item.TargetURL)).String()
 		p.owners[id] = home
-		homes[home] = append(homes[home], sheddingTarget{id, item.TargetURL, sizes[id]})
+		homes[home] = append(homes[home], weightedTarget{id, item.TargetURL, sizes[id]})
 	}
 	// Sum in stable order too: floating-point addition must not depend on map iteration.
 	for _, name := range names {
-		slices.SortFunc(homes[name], func(a, b sheddingTarget) int {
+		slices.SortFunc(homes[name], func(a, b weightedTarget) int {
 			if order := hashOrder(a.key, b.key); order != 0 {
 				return order
 			}
@@ -84,7 +72,7 @@ func (p *sheddingPlan) assignHomes(items map[target.ItemHash]*target.Item, sizes
 	return homes
 }
 
-func (p *sheddingPlan) shed(donor string, items []sheddingTarget, overloaded map[string]bool, ring *consistent.Consistent, ideal float64) {
+func (p *allocationPlan) shed(donor string, items []weightedTarget, overloaded map[string]bool, ring *consistent.Consistent, ideal float64) {
 	for _, item := range items {
 		if p.loads[donor] <= 1.2*ideal {
 			break
@@ -119,3 +107,13 @@ func hashOrder(a, b string) int {
 	}
 	return cmp.Compare(a, b)
 }
+
+func newLoadSheddingStrategy(config StrategyConfig) (allocationStrategy, error) {
+	c, err := sizeAwareConfig(loadSheddingStrategyName, config.LoadShedding)
+	if err != nil {
+		return nil, err
+	}
+	return &loadSheddingStrategy{config: c}, nil
+}
+
+func (s *loadSheddingStrategy) configuration() SizeAwareStrategyConfig { return s.config }

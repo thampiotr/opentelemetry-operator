@@ -20,10 +20,10 @@ type Inspection struct {
 }
 
 // Inspect returns the published assignments and the accounting sizes used to create them.
-func (a *loadSheddingAllocator) Inspect() Inspection {
+func (a *sizeAwareAllocator) Inspect() Inspection {
 	a.publishedMu.RLock()
 	defer a.publishedMu.RUnlock()
-	return Inspection{loadSheddingStrategyName, a.published.updated, maps.Clone(a.published.targets), maps.Clone(a.published.collectors), maps.Clone(a.published.sizes)}
+	return Inspection{a.strategy.GetName(), a.published.updated, maps.Clone(a.published.targets), maps.Clone(a.published.collectors), maps.Clone(a.published.sizes)}
 }
 
 func (a *allocator) Inspect() Inspection {

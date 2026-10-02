@@ -8,109 +8,44 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/open-telemetry/opentelemetry-operator/cmd/otel-allocator/internal/target"
 )
 
 // Assignment history is unbounded; only measurements and overload detection use K.
-type simSticky struct {
-	owners     map[string]string
-	overloaded map[string]int
-}
+type simSticky struct{ strategy *stickyStrategy }
 
 func newSimSticky() *simSticky {
-	return &simSticky{owners: map[string]string{}, overloaded: map[string]int{}}
+	return &simSticky{strategy: &stickyStrategy{owners: map[target.ItemHash]string{}, overloaded: map[string]int{}}}
 }
 
 func (s *simSticky) allocate(t *testing.T, history []simSnapshot, k int) simAllocation {
 	t.Helper()
 	a := windowMeasurements(t, history, k)
 	latest := history[len(history)-1]
-	names := slices.Clone(latest.collectors)
-	slices.Sort(names)
-	for _, name := range names {
-		a.loads[name] = 0
+	items := map[target.ItemHash]*target.Item{}
+	sizes := map[target.ItemHash]float64{}
+	collectors := map[string]*Collector{}
+	for _, name := range latest.collectors {
+		collectors[name] = NewCollector(name, "")
 	}
-	if len(names) == 0 {
-		s.owners = a.owners
-		clear(s.overloaded)
-		return a
+	for _, item := range latest.targets {
+		id := target.ItemHash((hasher{}).Sum64([]byte(item.address)))
+		items[id] = &target.Item{TargetURL: item.address}
+		sizes[id] = float64(a.sizes[item.address])
 	}
-	a.capacity = 1.2 * float64(a.total) / float64(len(names))
-	targets := slices.Clone(latest.targets)
-	slices.SortFunc(targets, func(x, y simulatedTarget) int {
-		if a.sizes[x.address] != a.sizes[y.address] {
-			return a.sizes[y.address] - a.sizes[x.address]
-		}
-		return hashOrder(x.address, y.address)
-	})
-	var pending []simulatedTarget
-	for _, target := range targets {
-		owner, exists := s.owners[target.address]
-		if _, alive := a.loads[owner]; exists && alive {
-			a.owners[target.address] = owner
-			a.loads[owner] += a.sizes[target.address]
-		} else {
-			pending = append(pending, target)
-		}
+	s.strategy.config.Window = k
+	p := s.strategy.plan(items, collectors, sizes, float64(a.total))
+	for id, owner := range p.owners {
+		a.owners[items[id].TargetURL] = owner
 	}
-	for _, target := range pending {
-		owner := stickyLeastLoaded(names, a.loads)
-		a.owners[target.address] = owner
-		a.loads[owner] += a.sizes[target.address]
+	for name, load := range p.loads {
+		a.loads[name] = int(load)
 	}
-	for name := range s.overloaded {
-		if _, alive := a.loads[name]; !alive {
-			delete(s.overloaded, name)
-		}
+	if len(collectors) > 0 {
+		a.capacity = 1.2 * float64(a.total) / float64(len(collectors))
 	}
-	// Count consecutive overloaded cycles before disturbing established targets.
-	for _, name := range names {
-		if float64(a.loads[name]) > a.capacity {
-			s.overloaded[name] = min(k, s.overloaded[name]+1)
-		} else {
-			s.overloaded[name] = 0
-		}
-	}
-	donors := slices.Clone(names)
-	slices.SortFunc(donors, func(x, y string) int {
-		if a.loads[x] != a.loads[y] {
-			return a.loads[y] - a.loads[x]
-		}
-		return hashOrder(x, y)
-	})
-	for _, donor := range donors {
-		if s.overloaded[donor] < k {
-			continue
-		}
-		for _, target := range targets {
-			if float64(a.loads[donor]) <= a.capacity {
-				break
-			}
-			if a.owners[target.address] != donor {
-				continue
-			}
-			receiver := stickyLeastLoaded(names, a.loads)
-			size := a.sizes[target.address]
-			// Each move reduces the pair's peak; receivers stay below 110% of ideal.
-			if receiver == donor || float64(a.loads[receiver]+size) > a.capacity*1.1/1.2 || a.loads[receiver]+size >= a.loads[donor] {
-				continue
-			}
-			a.owners[target.address] = receiver
-			a.loads[donor] -= size
-			a.loads[receiver] += size
-		}
-	}
-	s.owners = a.owners
 	return a
-}
-
-func stickyLeastLoaded(names []string, loads map[string]int) string {
-	owner := names[0]
-	for _, name := range names[1:] {
-		if loads[name] < loads[owner] {
-			owner = name
-		}
-	}
-	return owner
 }
 
 func TestSimulatedAllocation_Sticky(t *testing.T) {

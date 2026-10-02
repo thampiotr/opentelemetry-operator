@@ -91,7 +91,7 @@ func TestProbeRequest(t *testing.T) {
 	size, err := a.measureTarget(t.Context(), work)
 	require.NoError(t, err)
 	require.Equal(t, float64(2), size)
-	a.strategy.config.ProbeMaxBytes = 4
+	a.config.ProbeMaxBytes = 4
 	_, err = a.measureTarget(t.Context(), work)
 	require.ErrorContains(t, err, "exceeds", "limit applies after gzip decompression")
 	require.True(t, received.Load())
@@ -123,8 +123,8 @@ func TestProbeFailures(t *testing.T) {
 			}))
 			defer srv.Close()
 			a := testSheddingAllocator(t)
-			a.strategy.config.ProbeTimeout = 30 * time.Millisecond
-			a.strategy.config.ProbeMaxBytes = 100
+			a.config.ProbeTimeout = 30 * time.Millisecond
+			a.config.ProbeMaxBytes = 100
 			a.SetScrapeConfigs(map[string]*promconfig.ScrapeConfig{"job": probeConfig()})
 			item := sheddingItem("job", strings.TrimPrefix(srv.URL, "http://"))
 			a.SetTargets([]*target.Item{item})
@@ -183,8 +183,8 @@ func TestAsyncProbesDoNotDelayAllocation(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := testSheddingAllocator(t)
-	a.strategy.config.Interval = 10 * time.Millisecond
-	a.strategy.config.ProbeConcurrency = 2
+	a.config.Interval = 10 * time.Millisecond
+	a.config.ProbeConcurrency = 2
 	a.SetScrapeConfigs(map[string]*promconfig.ScrapeConfig{"job": probeConfig()})
 	items := MakeNTargetsForJob(4, "job", 0)
 	for _, item := range items {

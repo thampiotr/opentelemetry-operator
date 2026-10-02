@@ -29,6 +29,7 @@ func strategyBuilders() map[string]strategyBuilder {
 		consistentHashingStrategyName: func(StrategyConfig) (allocationStrategy, error) { return newConsistentHashingStrategy(), nil },
 		perNodeStrategyName:           func(config StrategyConfig) (allocationStrategy, error) { return buildPerNodeStrategy(config) },
 		loadSheddingStrategyName:      newLoadSheddingStrategy,
+		stickyStrategyName:            newStickyStrategy,
 	}
 }
 
@@ -69,7 +70,8 @@ type allocatorOptions struct {
 // StrategyConfig holds the configuration for the allocation strategies. Each strategy has its own
 // section because strategies accept different configuration options.
 type StrategyConfig struct {
-	LoadShedding      LoadSheddingStrategyConfig
+	Sticky            SizeAwareStrategyConfig
+	LoadShedding      SizeAwareStrategyConfig
 	ConsistentHashing ConsistentHashingStrategyConfig
 	LeastWeighted     LeastWeightedStrategyConfig
 	PerNode           PerNodeStrategyConfig
@@ -115,8 +117,8 @@ func New(name string, log logr.Logger, opts ...Option) (Allocator, error) {
 	}
 	log = log.WithValues("allocator", name)
 	switch s := strategy.(type) {
-	case *loadSheddingStrategy:
-		return newLoadSheddingAllocator(log, s)
+	case sizeAwareStrategy:
+		return newSizeAwareAllocator(log, s)
 	case Strategy:
 		return newAllocator(log, s)
 	default:

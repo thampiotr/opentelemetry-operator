@@ -1378,5 +1378,26 @@ allocation_strategy_config:
 	cfg := CreateDefaultConfig()
 	require.NoError(t, LoadFromFile(path, &cfg))
 	assert.Equal(t, "load-shedding", cfg.AllocationStrategy)
-	assert.Equal(t, LoadSheddingStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000, ProbeInterval: 30 * time.Second, ProbeTimeout: 5 * time.Second, ProbeConcurrency: 4, ProbeMaxBytes: 64 << 20}, cfg.AllocationStrategyConfig.LoadShedding)
+	assert.Equal(t, SizeAwareStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000, ProbeInterval: 30 * time.Second, ProbeTimeout: 5 * time.Second, ProbeConcurrency: 4, ProbeMaxBytes: 64 << 20}, cfg.AllocationStrategyConfig.LoadShedding)
+}
+
+func TestStickyConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`
+collector_namespace: default
+allocation_strategy: sticky
+allocation_strategy_config:
+  sticky:
+    interval: 5s
+    window: 6
+    default_size: 1000
+    probe_interval: 30s
+    probe_timeout: 5s
+    probe_concurrency: 4
+    probe_max_bytes: 67108864
+`), 0o600))
+	cfg := CreateDefaultConfig()
+	require.NoError(t, LoadFromFile(path, &cfg))
+	assert.Equal(t, "sticky", cfg.AllocationStrategy)
+	assert.Equal(t, SizeAwareStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000, ProbeInterval: 30 * time.Second, ProbeTimeout: 5 * time.Second, ProbeConcurrency: 4, ProbeMaxBytes: 64 << 20}, cfg.AllocationStrategyConfig.Sticky)
 }

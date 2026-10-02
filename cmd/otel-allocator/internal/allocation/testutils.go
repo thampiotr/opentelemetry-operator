@@ -98,20 +98,20 @@ func RunForAllStrategies(t *testing.T, f func(t *testing.T, allocator Allocator)
 // It is for tests and benchmarks which expect synchronous SetTargets/SetCollectors.
 func NewTestAllocator(name string, log logr.Logger) (Allocator, error) {
 	a, err := New(name, log)
-	if periodic, ok := a.(*loadSheddingAllocator); ok {
+	if periodic, ok := a.(*sizeAwareAllocator); ok {
 		return synchronousAllocator{periodic}, err
 	}
 	return a, err
 }
 
-type synchronousAllocator struct{ *loadSheddingAllocator }
+type synchronousAllocator struct{ *sizeAwareAllocator }
 
 func (a synchronousAllocator) SetTargets(items []*target.Item) {
-	a.loadSheddingAllocator.SetTargets(items)
+	a.sizeAwareAllocator.SetTargets(items)
 	a.cycle()
 }
 
 func (a synchronousAllocator) SetCollectors(collectors map[string]*Collector) {
-	a.loadSheddingAllocator.SetCollectors(collectors)
+	a.sizeAwareAllocator.SetCollectors(collectors)
 	a.cycle()
 }

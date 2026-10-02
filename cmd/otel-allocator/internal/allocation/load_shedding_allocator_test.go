@@ -19,9 +19,9 @@ import (
 
 func TestLoadSheddingConfig(t *testing.T) {
 	a := testSheddingAllocator(t)
-	require.Equal(t, LoadSheddingStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000, ProbeInterval: 30 * time.Second, ProbeTimeout: 5 * time.Second, ProbeConcurrency: 4, ProbeMaxBytes: 64 << 20}, a.strategy.config)
+	require.Equal(t, SizeAwareStrategyConfig{Interval: 5 * time.Second, Window: 6, DefaultSize: 1000, ProbeInterval: 30 * time.Second, ProbeTimeout: 5 * time.Second, ProbeConcurrency: 4, ProbeMaxBytes: 64 << 20}, a.config)
 	require.Contains(t, GetRegisteredAllocatorNames(), loadSheddingStrategyName)
-	for _, config := range []LoadSheddingStrategyConfig{
+	for _, config := range []SizeAwareStrategyConfig{
 		{Interval: -1}, {Window: -1}, {Window: 121}, {DefaultSize: -1}, {DefaultSize: math.NaN()}, {DefaultSize: math.Inf(1)}, {ProbeInterval: -1}, {ProbeTimeout: -1}, {ProbeConcurrency: -1}, {ProbeConcurrency: 65}, {ProbeMaxBytes: -1}, {ProbeMaxBytes: 1 << 31},
 	} {
 		_, err := New(loadSheddingStrategyName, logr.Discard(), WithStrategyConfig(StrategyConfig{LoadShedding: config}))
@@ -117,7 +117,7 @@ func TestLoadSheddingConcurrentReaders(t *testing.T) {
 
 func TestLoadSheddingRun(t *testing.T) {
 	a := testSheddingAllocator(t)
-	a.strategy.config.Interval = 10 * time.Millisecond
+	a.config.Interval = 10 * time.Millisecond
 	a.SetTargets([]*target.Item{sheddingItem("job", "host:80")})
 	a.SetCollectors(map[string]*Collector{"node": NewCollector("node", "")})
 	ctx, cancel := context.WithCancel(t.Context())
@@ -134,11 +134,11 @@ func TestLoadSheddingRun(t *testing.T) {
 	}
 }
 
-func testSheddingAllocator(t *testing.T) *loadSheddingAllocator {
+func testSheddingAllocator(t *testing.T) *sizeAwareAllocator {
 	t.Helper()
 	a, err := New(loadSheddingStrategyName, logr.Discard())
 	require.NoError(t, err)
-	return a.(*loadSheddingAllocator)
+	return a.(*sizeAwareAllocator)
 }
 
 func sheddingItem(job, address string) *target.Item {

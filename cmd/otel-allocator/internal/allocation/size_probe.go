@@ -40,7 +40,7 @@ type sizeProbe struct {
 	state *probeState
 }
 
-func (a *loadSheddingAllocator) SetScrapeConfigs(configs map[string]*promconfig.ScrapeConfig) {
+func (a *sizeAwareAllocator) SetScrapeConfigs(configs map[string]*promconfig.ScrapeConfig) {
 	jobs := make(map[string]*probeJob, len(configs))
 	for name, cfg := range configs {
 		client, err := commonconfig.NewClientFromConfig(cfg.HTTPClientConfig, "target_allocator_size_probe")
@@ -67,15 +67,15 @@ func closeProbeJobs(jobs map[string]*probeJob) {
 	}
 }
 
-func (a *loadSheddingAllocator) wakeProbes() {
+func (a *sizeAwareAllocator) wakeProbes() {
 	select {
 	case a.probeWake <- struct{}{}:
 	default:
 	}
 }
 
-func (a *loadSheddingAllocator) runProber(ctx context.Context) {
-	ticker := time.NewTicker(min(time.Second, a.strategy.config.ProbeInterval))
+func (a *sizeAwareAllocator) runProber(ctx context.Context) {
+	ticker := time.NewTicker(min(time.Second, a.config.ProbeInterval))
 	defer ticker.Stop()
 	for ctx.Err() == nil {
 		if work := a.takeProbe(time.Now()); work != nil {
@@ -93,7 +93,7 @@ func (a *loadSheddingAllocator) runProber(ctx context.Context) {
 }
 
 // takeProbe selects from current discovery, without queuing snapshots behind slow requests.
-func (a *loadSheddingAllocator) takeProbe(now time.Time) *sizeProbe {
+func (a *sizeAwareAllocator) takeProbe(now time.Time) *sizeProbe {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	var work *sizeProbe
@@ -113,7 +113,7 @@ func (a *loadSheddingAllocator) takeProbe(now time.Time) *sizeProbe {
 	return work
 }
 
-func (a *loadSheddingAllocator) finishProbe(work *sizeProbe, size float64, err error) {
+func (a *sizeAwareAllocator) finishProbe(work *sizeProbe, size float64, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.probes[work.item.Hash()] != work.state {
@@ -124,7 +124,7 @@ func (a *loadSheddingAllocator) finishProbe(work *sizeProbe, size float64, err e
 		work.job.client.CloseIdleConnections()
 		return
 	}
-	work.state.next = time.Now().Add(a.strategy.config.ProbeInterval)
+	work.state.next = time.Now().Add(a.config.ProbeInterval)
 	if err == nil {
 		a.estimates[work.item.Hash()] = max(1, size)
 	} else {
@@ -132,12 +132,12 @@ func (a *loadSheddingAllocator) finishProbe(work *sizeProbe, size float64, err e
 	}
 }
 
-func (a *loadSheddingAllocator) measureTarget(ctx context.Context, work *sizeProbe) (float64, error) {
+func (a *sizeAwareAllocator) measureTarget(ctx context.Context, work *sizeProbe) (float64, error) {
 	u, err := work.item.ScrapeURL(work.job.config)
 	if err != nil {
 		return 0, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, a.strategy.config.ProbeTimeout)
+	ctx, cancel := context.WithTimeout(ctx, a.config.ProbeTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -150,7 +150,7 @@ func (a *loadSheddingAllocator) measureTarget(ctx context.Context, work *sizePro
 		return 0, err
 	}
 	defer resp.Body.Close()
-	return countProbeResponse(resp, a.strategy.config.ProbeMaxBytes)
+	return countProbeResponse(resp, a.config.ProbeMaxBytes)
 }
 
 func countProbeResponse(resp *http.Response, limit int64) (float64, error) {
